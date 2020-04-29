@@ -2,6 +2,7 @@ import asyncio
 import json
 import websockets
 import collections
+import queue, threading
 
 from .log import logger
 from .encoding import Encoding, TextEncoding
@@ -87,6 +88,11 @@ class Connection:
         self._recv_queue = collections.deque()
         self._recv_await = None
         self._recv_task = None
+        self._recv_raw_buffer = queue.Queue()
+        self._send_buffer = queue.Queue()
+        self._recv_raw_worker = threading.Thread(target=self._recv_raw_worker, daemon=True)
+        self._recv_raw_worker.start()
+
 
     async def connect(self):
         """
@@ -102,7 +108,7 @@ class Connection:
 
         # await a hello event
         while True:
-            packet = await self._read_single()
+            packet = await self._recieve_single()
             if packet['type'] == 'method' and packet['method'] == 'hello':
                 break
 
@@ -151,7 +157,6 @@ class Connection:
         """
         Handles a single received packet from the Interactive service.
         """
-
         if 'seq' in data:
             self._last_sequence_number = data['seq']
 
@@ -175,19 +180,24 @@ class Connection:
         future = self._socket.send(self._encode(json_encoder.encode(payload)))
         asyncio.ensure_future(future, loop=self._loop)
 
-    async def _read_single(self):
+    async def _buffer_single(self):
+        """
+        Stores a packet into the buffer for further processing
+        """
+        raw_data = await _recieve_single(self)
+        self._recv_raw_buffer.put(raw_data)
+
+    async def _recieve_single(self):
         """
         Reads a single event off the websocket.
         """
         try:
-            raw_data = await self._socket.recv()
+            return await self._socket.recv()
         except (asyncio.CancelledError, websockets.ConnectionClosed) as e:
             if self._recv_await is None:
                 self._recv_await = asyncio.Future(loop=self._loop)
             self._recv_await.set_result(False)
             raise e
-
-        return json.loads(self._decode(raw_data))
 
     async def _read(self):
         """
@@ -195,18 +205,27 @@ class Connection:
         """
         while True:
             try:
-                data = await self._read_single()
+                data = await self._buffer_single()
             except (asyncio.CancelledError, websockets.ConnectionClosed):
                 break  # will already be handled
             except Exception as e:
                 logger.error("error in interactive read loop", extra=e)
                 break
 
+    def _process_raw_worker(self):
+        """
+        Threaded loop for dequeing incoming messages from the websocket connection
+        """
+        while True:
+            data = json.loads(
+                self._decode(self._recv_raw_buffer.get())
+                )
             if isinstance(data, list):
                 for item in data:
                     self._handle_recv(item)
             else:
                 self._handle_recv(data)
+            self._recv_raw_buffer.task_done()
 
     async def set_compression(self, scheme):
         """Updates the compression used on the websocket this should be
