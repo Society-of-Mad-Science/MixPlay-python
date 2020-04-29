@@ -1,4 +1,4 @@
-# MixPlay-python
+# MixPlay Python
 
 NOTE: This repo is not affiliated with Microsoft
 This is a fork of mixer/interactive-python, a python based Mixplay SDK game client.
