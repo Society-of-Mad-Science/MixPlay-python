@@ -92,7 +92,8 @@ class Connection:
         self._send_buffer = queue.Queue()
         self._recv_decode_thread = threading.Thread(target=self._recv_decode_worker, daemon=True)
         self._recv_decode_thread.start()
-        self._send_task = asyncio.create_task(self._send_worker())
+        self._send_thread = threading.Thread(target=self._send_worker, daemon=True)
+        self._send_thread.start()
 
 
     async def connect(self):
@@ -180,10 +181,15 @@ class Connection:
         """ 
         self._send_buffer.put(payload)
 
-    async def _send_worker(self):
+    def _send_worker(self):
+        """
+        Threaded worker for sending data back to Mixplay server
+        """
         while True:
             payload = self._send_buffer.get()
-            await self._socket.send(self._encode(json_encoder.encode(payload)))
+            data = self._encode(json_encoder.encode(payload))
+            self._send_buffer.task_done()
+            asyncio.run(self._socket.send(data))
 
     async def _buffer_single(self):
         """
