@@ -90,8 +90,9 @@ class Connection:
         self._recv_task = None
         self._recv_raw_buffer = queue.Queue()
         self._send_buffer = queue.Queue()
-        self._recv_raw_worker = threading.Thread(target=self._recv_raw_worker, daemon=True)
-        self._recv_raw_worker.start()
+        self._recv_decode_thread = threading.Thread(target=self._recv_decode_worker, daemon=True)
+        self._recv_decode_thread.start()
+        self._send_task = asyncio.create_task(self._send_worker())
 
 
     async def connect(self):
@@ -176,9 +177,13 @@ class Connection:
     def _send(self, payload):
         """
         Encodes and sends a dict payload.
-        """
-        future = self._socket.send(self._encode(json_encoder.encode(payload)))
-        asyncio.ensure_future(future, loop=self._loop)
+        """ 
+        self._send_buffer.put(payload)
+
+    async def _send_worker(self):
+        while True:
+            payload = self._send_buffer.get()
+            await self._socket.send(self._encode(json_encoder.encode(payload)))
 
     async def _buffer_single(self):
         """
@@ -212,7 +217,7 @@ class Connection:
                 logger.error("error in interactive read loop", extra=e)
                 break
 
-    def _process_raw_worker(self):
+    def _recv_decode_worker(self):
         """
         Threaded loop for dequeing incoming messages from the websocket connection
         """
