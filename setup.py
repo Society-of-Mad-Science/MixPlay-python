@@ -2,11 +2,11 @@ import sys
 from setuptools import setup, find_packages
 
 if sys.version_info < (3, 5):
-    raise Exception("mixplay-python makes use of asyncio, async, and"
+    raise Exception("mixplay_python makes use of asyncio, async, and"
                     "await, and therefore requires Python >= 3.5.x")
 
 setup(
-    name='mixplay-python',
+    name='mixplay_python',
     version='0.1.0',
     description='Reference API implementation for MixPlay',
     classifiers=[

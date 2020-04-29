@@ -9,7 +9,7 @@ Run this with::
     python -m examples.2_shortcode_oauth.oauth <YourClientId>
 """
 
-import interactive_python as interactive
+import mixplay_python as interactive
 import asyncio
 from sys import argv
 
