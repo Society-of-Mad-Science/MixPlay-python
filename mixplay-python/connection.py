@@ -35,6 +35,13 @@ class Call:
         """
         return self._payload['params']
 
+    def reply(self, result):
+        """
+        Submits a successful reply for the call.
+        :param result: The result to send to tetrisd
+        """
+        self._connection.reply(self._id, result=result)
+
     def reply_error(self, result):
         """
         Submits a successful reply for the call.
@@ -48,6 +55,15 @@ class Call:
         :param error: The error to send to tetrisd
         """
         self._connection.reply(self._id, error=error)
+
+    async def capture(self):
+        """
+        Captures the transaction if it's captureable
+        call(method, params)
+        """
+        if self._payload.get('params', {}).get('transactionID'):
+            await self._connection.call('capture', {'transactionID': self._payload['params']['transactionID']}, True)
+
 
 
 class Connection:
